@@ -1,7 +1,5 @@
 use std::collections::HashMap;
 
-use hyper::Client;
-use hyper_tls::HttpsConnector;
 use serde::Deserialize;
 use serde_xml_rs::from_str;
 
@@ -79,20 +77,12 @@ fn parse_currencies(
     Ok(conversion_map)
 }
 
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    let https = HttpsConnector::new();
-    let client = Client::builder().build::<_, hyper::Body>(https);
+fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let uri = "https://www.ecb.europa.eu/stats/eurofxref/eurofxref-daily.xml";
 
-    let uri = "https://www.ecb.europa.eu/stats/eurofxref/eurofxref-daily.xml".parse()?;
+    let body: String = ureq::get(uri).call()?.into_string()?;
 
-    // Await the response...
-    let res = client.get(uri).await?;
-
-    let body_bytes = hyper::body::to_bytes(res).await?;
-    let body = std::str::from_utf8(&body_bytes)?;
-
-    let conversion_map = parse_currencies(body)?;
+    let conversion_map = parse_currencies(&body)?;
     println!("Response: {:?}", conversion_map);
 
     // USD to EUR
