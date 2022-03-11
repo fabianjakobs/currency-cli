@@ -1,38 +1,10 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, str::FromStr};
 
 use hyper::Client;
 use hyper_tls::HttpsConnector;
-use serde::Deserialize;
-use serde_xml_rs::from_str;
+use xmltree::{Element, XMLNode};
 
-#[derive(Debug, Deserialize, PartialEq)]
-#[serde(rename = "gesmes:Envelope")]
-struct Document {
-    #[serde(rename = "Cube")]
-    cube: Cube1,
-}
-
-#[derive(Debug, Deserialize, PartialEq)]
-struct Cube1 {
-    #[serde(rename = "Cube")]
-    cube: Cube2,
-}
-
-#[derive(Debug, Deserialize, PartialEq)]
-struct Cube2 {
-    time: String,
-    #[serde(rename = "Cube")]
-    conversion: Vec<Conversion>,
-}
-
-#[derive(Debug, Deserialize, PartialEq)]
-#[serde(rename = "Cube")]
-struct Conversion {
-    currency: Currency,
-    rate: f64,
-}
-
-#[derive(Debug, Copy, Clone, Deserialize, PartialEq, Eq, Hash)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 enum Currency {
     USD,
     JPY,
@@ -67,15 +39,71 @@ enum Currency {
     INR,
 }
 
+impl FromStr for Currency {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "USD" => Ok(Currency::USD),
+            "JPY" => Ok(Currency::JPY),
+            "BGN" => Ok(Currency::BGN),
+            "CZK" => Ok(Currency::CZK),
+            "DKK" => Ok(Currency::DKK),
+            "GBP" => Ok(Currency::GBP),
+            "HUF" => Ok(Currency::HUF),
+            "PLN" => Ok(Currency::PLN),
+            "RON" => Ok(Currency::RON),
+            "SEK" => Ok(Currency::SEK),
+            "CHF" => Ok(Currency::CHF),
+            "ISK" => Ok(Currency::ISK),
+            "NOK" => Ok(Currency::NOK),
+            "HRK" => Ok(Currency::HRK),
+            "TRY" => Ok(Currency::TRY),
+            "AUD" => Ok(Currency::AUD),
+            "BRL" => Ok(Currency::BRL),
+            "KRW" => Ok(Currency::KRW),
+            "MXN" => Ok(Currency::MXN),
+            "MYR" => Ok(Currency::MYR),
+            "NZD" => Ok(Currency::NZD),
+            "PHP" => Ok(Currency::PHP),
+            "SGD" => Ok(Currency::SGD),
+            "THB" => Ok(Currency::THB),
+            "ZAR" => Ok(Currency::ZAR),
+            "CAD" => Ok(Currency::CAD),
+            "CNY" => Ok(Currency::CNY),
+            "HKD" => Ok(Currency::HKD),
+            "IDR" => Ok(Currency::IDR),
+            "ILS" => Ok(Currency::ILS),
+            "INR" => Ok(Currency::INR),
+            _ => Err(format!("'{}' is not a valid value for Currency", s)),
+        }
+    }
+}
+
 impl Currency {}
 
 fn parse_currencies(
     body: &str,
 ) -> Result<HashMap<Currency, f64>, Box<dyn std::error::Error + Send + Sync>> {
-    let document: Document = from_str(body)?;
-    let conversions = document.cube.cube.conversion;
+    let document = Element::parse(body.as_bytes()).unwrap();
 
-    let conversion_map: HashMap<_, _> = conversions.iter().map(|c| (c.currency, c.rate)).collect();
+    let conversion_map: HashMap<_, _> = document
+        .get_child("Cube")
+        .unwrap()
+        .get_child("Cube")
+        .unwrap()
+        .children
+        .iter()
+        .map(|node| {
+            let attributes = &node.as_element().unwrap().attributes;
+            (
+                Currency::from_str(&attributes["currency"]).unwrap(),
+                attributes["rate"].parse::<f64>().unwrap(),
+            )
+        })
+        .collect();
+
+    println!("Doc: {:?}", conversion_map);
     Ok(conversion_map)
 }
 
