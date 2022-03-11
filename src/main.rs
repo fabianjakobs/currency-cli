@@ -1,9 +1,12 @@
+use clap::Parser;
+use core::fmt;
 use std::{collections::HashMap, str::FromStr};
-
-use xmltree::{Element, XMLNode};
+use xmltree::Element;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+#[allow(clippy::upper_case_acronyms)]
 enum Currency {
+    EUR,
     USD,
     JPY,
     BGN,
@@ -11,8 +14,8 @@ enum Currency {
     DKK,
     GBP,
     HUF,
-    PLN,
     RON,
+    PLN,
     SEK,
     CHF,
     ISK,
@@ -37,11 +40,18 @@ enum Currency {
     INR,
 }
 
+impl fmt::Display for Currency {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
+
 impl FromStr for Currency {
     type Err = String;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
+            "EUR" => Ok(Currency::EUR),
             "USD" => Ok(Currency::USD),
             "JPY" => Ok(Currency::JPY),
             "BGN" => Ok(Currency::BGN),
@@ -78,45 +88,77 @@ impl FromStr for Currency {
     }
 }
 
-impl Currency {}
+#[derive(Debug)]
+struct Converter {
+    conversion_map: HashMap<Currency, f64>,
+}
 
-fn parse_currencies(
-    body: &str,
-) -> Result<HashMap<Currency, f64>, Box<dyn std::error::Error + Send + Sync>> {
-    let document = Element::parse(body.as_bytes()).unwrap();
+impl Converter {
+    pub fn new(conversion_map: HashMap<Currency, f64>) -> Converter {
+        Converter { conversion_map }
+    }
 
-    let conversion_map: HashMap<_, _> = document
-        .get_child("Cube")
-        .unwrap()
-        .get_child("Cube")
-        .unwrap()
-        .children
-        .iter()
-        .map(|node| {
-            let attributes = &node.as_element().unwrap().attributes;
-            (
-                Currency::from_str(&attributes["currency"]).unwrap(),
-                attributes["rate"].parse::<f64>().unwrap(),
-            )
-        })
-        .collect();
+    pub fn from_xml(
+        document: &Element,
+    ) -> Result<Converter, Box<dyn std::error::Error + Send + Sync>> {
+        let mut conversion_map: HashMap<_, _> = document
+            .get_child("Cube")
+            .ok_or("Invalid XML")?
+            .get_child("Cube")
+            .ok_or("Invalid XML")?
+            .children
+            .iter()
+            .map(|node| {
+                let attributes = &node.as_element().ok_or("Invalid XML")?.attributes;
+                Ok((
+                    Currency::from_str(&attributes["currency"])?,
+                    attributes["rate"].parse::<f64>()?,
+                ))
+            })
+            .collect::<Result<HashMap<_, _>, Box<dyn std::error::Error + Send + Sync>>>()?;
 
-    println!("Doc: {:?}", conversion_map);
-    Ok(conversion_map)
+        conversion_map.insert(Currency::EUR, 1.0);
+
+        Ok(Converter { conversion_map })
+    }
+
+    pub fn convert(&self, value: f64, from: Currency, to: Currency) -> f64 {
+        if from == Currency::EUR {
+            value * self.conversion_map[&to]
+        } else if to == Currency::EUR {
+            value / self.conversion_map[&from]
+        } else {
+            (value / self.conversion_map[&from]) * self.conversion_map[&to]
+        }
+    }
+}
+
+#[derive(Parser)]
+#[clap(author, version, about)]
+struct Cli {
+    #[clap(short, long)]
+    from: Currency,
+    #[clap(short, long)]
+    #[clap(default_value_t = Currency::EUR)]
+    to: Currency,
+    value: f64,
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let args = Cli::parse();
+
     let uri = "https://www.ecb.europa.eu/stats/eurofxref/eurofxref-daily.xml";
-
     let body: String = ureq::get(uri).call()?.into_string()?;
+    let document = Element::parse(body.as_bytes()).unwrap();
 
-    let conversion_map = parse_currencies(&body)?;
-    println!("Response: {:?}", conversion_map);
+    let converter = Converter::from_xml(&document)?;
 
-    // USD to EUR
     println!(
-        "100 USD equals {:.2} EUR",
-        100.0 / conversion_map[&Currency::USD]
+        "{} {:?} equals {:.2} {:?}",
+        args.value,
+        args.from,
+        converter.convert(args.value, args.from, args.to),
+        args.to
     );
 
     Ok(())
