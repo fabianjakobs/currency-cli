@@ -1,4 +1,7 @@
 [package]
+description = "Currency converter to convert between popular currencies."
+license = "MIT"
+authors = ["Fabian Jakobs"]
 name = "currency-cli"
 version = "0.1.0"
 edition = "2021"
@@ -6,11 +9,9 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-hyper = { version = "0.14", features = ["full"] }
-hyper-tls = { version = "0.5" }
-serde = { version = "1.0", features = ["derive"] }
-serde-xml-rs = { version = "0.5" }
-tokio = { version = "1", features = ["full"] }
+xmltree = { version = "0.10" }
+ureq = { version = "2.4", features = ["tls"] }
+clap = { version = "3.0", features = ["derive"] }
 
 [profile.release]
 strip = true      # Automatically strip symbols from the binary.
