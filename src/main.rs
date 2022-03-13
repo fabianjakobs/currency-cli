@@ -20,7 +20,7 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 
     let uri = "https://www.ecb.europa.eu/stats/eurofxref/eurofxref-daily.xml";
     let body: String = ureq::get(uri).call()?.into_string()?;
-    let document = Element::parse(body.as_bytes()).unwrap();
+    let document = Element::parse(body.as_bytes())?;
 
     let converter = Converter::from_xml(&document)?;
 
